@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Airdropper Project — Invariant Test Guarantees (v1)
 
-## Getting Started
+Scope: smart contract Project.sol (round-based deposits, payouts, JackDrop, emergency refunds).
+Tooling: Foundry forge test with invariant fuzzing (high runs/depth) + time-warp (vm.warp) + multi-round sequencing.
 
-First, run the development server:
+What is proven by invariants (high confidence)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1) No double-claim / no replay drain
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+If payoutClaimed(round, user) == true then payoutAmount(round, user) == 0.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+If jackDropClaimed(round) == true then jackDropAmount(round) == 0.
+This prevents repeated withdrawals of the same entitlement under arbitrary call ordering.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+2) Contract token balance always covers internal accounting
 
-## Learn More
+USDC.balanceOf(Project) >= jackpotBalance + devBalance + aggregatorBalance
+Holds under random sequences of deposits, closes, claims, emergency flows, and time-warp.
 
-To learn more about Next.js, take a look at the following resources:
+3) Multi-round state isolation (“closed rounds are frozen”)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+After a round is closed and the next round opens, the per-round participant entry state does not mutate.
+In practice: entriesOf(closedRoundId, user) remains unchanged forever after closure.
+This eliminates cross-round state bleed and “retroactive mutation” bugs.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+4) Time-dependent edge cases exercised
 
-## Deploy on Vercel
+vm.warp fuzzing explores payout/refund deadline boundaries and ordering.
+Ensures behavior remains safe around expiry conditions and mixed call sequences.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+What this eliminates (attack classes)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Double-claim / replay drains
+
+State bleed between rounds (round N affecting round N−1)
+
+“Accounting promises > token balance” style insolvency bugs (within tested accounting scope)
+
+Deadline edge-case regressions under adversarial ordering
+
+Version pin
+
+This invariant suite corresponds to git tag: audit-invariants-v1.
